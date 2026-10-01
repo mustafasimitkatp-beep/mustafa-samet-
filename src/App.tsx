@@ -434,7 +434,24 @@ export default function App() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/10 backdrop-blur-md border border-white/15">
+              <img
+                src="/profile.jpg"
+                alt="Profil Fotoğrafı"
+                className="w-9 h-9 rounded-full object-cover ring-2 ring-blue-400 shadow-sm"
+              />
+              <div className="text-left">
+                <div className="text-xs font-bold text-white leading-tight">
+                  {currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Öğrenci Portalı'}
+                </div>
+                <div className="text-[11px] text-blue-200 flex items-center gap-1 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  {currentUser ? 'Bulut Senkronize' : 'Profil Aktif'}
+                </div>
+              </div>
+            </div>
+
             <button
               onClick={() => setIsDriveHubOpen(true)}
               className="px-4 py-2.5 text-xs font-bold text-slate-900 bg-white hover:bg-slate-100 rounded-xl shadow-xs transition-all flex items-center gap-2"
