@@ -34,6 +34,10 @@
     }
   },
   "firestore": {
+    "/schedules/{scheduleId}": {
+      "schema": "UserSchedule",
+      "description": "30 haftalık ödev ve Google Drive linklerinin tüm cihazlar ve tarayıcılar için merkezi canlı veritabanı kaydı"
+    },
     "/users/{userId}/schedule/current": {
       "schema": "UserSchedule",
       "description": "Kullanıcının 30 haftalık ödev ve Google Drive veritabanı kaydı"

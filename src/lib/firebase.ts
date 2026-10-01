@@ -102,28 +102,73 @@ export function subscribeToAuth(callback: (user: User | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
 
-// Cloud Persistence: Save user schedule
-export async function saveUserScheduleToCloud(
-  userId: string,
+// Central Cloud Schedule Path
+const CENTRAL_DOC_PATH = 'schedules/main';
+
+// Save entire schedule to central cloud Firestore (accessible by all browsers and phones)
+export async function saveCentralScheduleToCloud(
   weeks: WeekPlan[],
-  settings: ProjectSettings
+  settings: ProjectSettings,
+  user?: User | null
 ) {
-  const docPath = `users/${userId}/schedule/current`;
   try {
-    await setDoc(doc(db, 'users', userId, 'schedule', 'current'), {
-      userId,
-      email: auth.currentUser?.email || '',
+    const payload = {
       weeks,
       googleDriveFolderUrl: settings.googleDriveFolderUrl || '',
       projectName: settings.projectName || '',
+      lastUpdatedBy: user?.email || user?.displayName || 'Web Kullanıcısı',
+      lastUpdatedUserId: user?.uid || null,
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    // 1. Save to central document so any browser/phone immediately sees it
+    await setDoc(doc(db, 'schedules', 'main'), payload);
+
+    // 2. Also save to user's private collection if signed in
+    if (user?.uid) {
+      await setDoc(doc(db, 'users', user.uid, 'schedule', 'current'), {
+        ...payload,
+        userId: user.uid,
+        email: user.email || '',
+      });
+    }
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, docPath);
+    handleFirestoreError(error, OperationType.WRITE, CENTRAL_DOC_PATH);
   }
 }
 
-// Cloud Persistence: Realtime subscription for logged in user
+// Subscribe in real-time to central schedule (so phones, tablets and browsers update live!)
+export function subscribeToCentralSchedule(
+  onData: (data: { weeks: WeekPlan[]; settings?: Partial<ProjectSettings>; lastUpdatedBy?: string } | null) => void,
+  onError?: (err: unknown) => void
+) {
+  const scheduleDocRef = doc(db, 'schedules', 'main');
+
+  return onSnapshot(
+    scheduleDocRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        onData({
+          weeks: data.weeks || [],
+          settings: {
+            googleDriveFolderUrl: data.googleDriveFolderUrl,
+            projectName: data.projectName,
+          },
+          lastUpdatedBy: data.lastUpdatedBy,
+        });
+      } else {
+        onData(null);
+      }
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, CENTRAL_DOC_PATH);
+      if (onError) onError(error);
+    }
+  );
+}
+
+// User-specific schedule subscription
 export function subscribeToUserSchedule(
   userId: string,
   onData: (data: { weeks: WeekPlan[]; settings?: Partial<ProjectSettings> } | null) => void,

@@ -26,6 +26,12 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    // Global App Schedule - Accessible across all browsers, phones and devices
+    match /schedules/{scheduleId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // User's private homework schedule and 30-week Google Drive links
     match /users/{userId} {
       allow read, write: if isOwner(userId);

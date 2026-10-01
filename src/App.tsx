@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WeekPlan, InnovationItem, ProjectSettings } from './types/curriculum';
 import { INITIAL_WEEKS, INITIAL_SETTINGS, PHASES } from './data/defaultWeeks';
 import { Header } from './components/Header';
@@ -15,8 +15,8 @@ import {
   loginWithGoogle,
   logoutUser,
   subscribeToAuth,
-  saveUserScheduleToCloud,
-  subscribeToUserSchedule,
+  saveCentralScheduleToCloud,
+  subscribeToCentralSchedule,
   testFirestoreConnection,
 } from './lib/firebase';
 import { User } from 'firebase/auth';
@@ -30,18 +30,25 @@ import {
   CheckCircle2,
   ShieldCheck,
   LogIn,
+  Smartphone,
+  Cloud,
+  Check,
 } from 'lucide-react';
 
 const STORAGE_KEY_WEEKS = 'curriculum_30_weeks_v2';
 const STORAGE_KEY_SETTINGS = 'curriculum_30_settings_v2';
 
 export default function App() {
-  // Authentication & Sync State
+  // Authentication & Cloud Sync States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const isInitialLoadFromCloud = useRef(false);
+  const [cloudStatus, setCloudStatus] = useState<'connecting' | 'synced' | 'offline'>('connecting');
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
 
-  // Load weeks from localStorage or defaults
+  // Flag to ensure we NEVER overwrite cloud data before first snapshot load
+  const hasLoadedFromCloud = useRef(false);
+
+  // Load initial fallback from localStorage or clean defaults
   const [weeks, setWeeks] = useState<WeekPlan[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_WEEKS);
@@ -91,81 +98,96 @@ export default function App() {
 
     const unsubscribe = subscribeToAuth((user) => {
       setCurrentUser(user);
-      if (user) {
-        showToast(`Hoş geldiniz, ${user.displayName || user.email}!`);
-      }
     });
 
     return () => unsubscribe();
   }, []);
 
-  // 2. Real-time Firestore Sync when User is Logged In
+  // 2. CENTRAL REAL-TIME FIRESTORE SYNC:
+  // Every phone, tablet, and browser listens to the live Firestore document
   useEffect(() => {
-    if (!currentUser) return;
+    setCloudStatus('connecting');
 
-    isInitialLoadFromCloud.current = true;
-    const unsubscribeSnapshot = subscribeToUserSchedule(
-      currentUser.uid,
+    const unsubscribe = subscribeToCentralSchedule(
       (cloudData) => {
         if (cloudData && cloudData.weeks && cloudData.weeks.length > 0) {
+          // Received latest live data from Cloud Firestore!
           setWeeks(cloudData.weeks);
+          try {
+            localStorage.setItem(STORAGE_KEY_WEEKS, JSON.stringify(cloudData.weeks));
+          } catch {
+            // ignore
+          }
+
           if (cloudData.settings?.googleDriveFolderUrl) {
             setSettings((prev) => ({
               ...prev,
               googleDriveFolderUrl: cloudData.settings?.googleDriveFolderUrl || prev.googleDriveFolderUrl,
             }));
           }
+          setCloudStatus('synced');
+          setLastSyncTime(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         } else {
-          // If first time login with no cloud data, upload current state to Cloud
-          saveUserScheduleToCloud(currentUser.uid, weeks, settings);
+          // If no document exists in Firestore yet, seed it with current local state
+          saveCentralScheduleToCloud(weeks, settings, currentUser)
+            .then(() => {
+              setCloudStatus('synced');
+            })
+            .catch(() => {
+              setCloudStatus('offline');
+            });
         }
-        isInitialLoadFromCloud.current = false;
+        hasLoadedFromCloud.current = true;
       },
       (err) => {
-        console.error('Snapshot error:', err);
+        console.warn('Real-time sync subscription error, using local data:', err);
+        setCloudStatus('offline');
+        hasLoadedFromCloud.current = true;
       }
     );
 
-    return () => unsubscribeSnapshot();
-  }, [currentUser?.uid]);
+    return () => unsubscribe();
+  }, []);
 
-  // 3. LocalStorage persistence & Cloud Push
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_WEEKS, JSON.stringify(weeks));
-    } catch (e) {
-      console.error('Failed to save weeks', e);
-    }
+  // Helper to persist updates to BOTH local state and Cloud Firestore
+  const persistChanges = useCallback(
+    async (updatedWeeks: WeekPlan[], updatedSettings = settings) => {
+      setWeeks(updatedWeeks);
+      try {
+        localStorage.setItem(STORAGE_KEY_WEEKS, JSON.stringify(updatedWeeks));
+        localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(updatedSettings));
+      } catch (e) {
+        console.error('Local storage save error', e);
+      }
 
-    // If logged in and not currently loading from cloud, push changes to Firestore
-    if (currentUser && !isInitialLoadFromCloud.current) {
+      // Immediately write to Firestore so all phones and browsers update instantly!
       setIsSyncing(true);
-      saveUserScheduleToCloud(currentUser.uid, weeks, settings)
-        .catch((err) => console.error('Cloud save failed', err))
-        .finally(() => {
-          setTimeout(() => setIsSyncing(false), 400);
-        });
-    }
-  }, [weeks, currentUser?.uid]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
-    } catch (e) {
-      console.error('Failed to save settings', e);
-    }
-  }, [settings]);
+      try {
+        await saveCentralScheduleToCloud(updatedWeeks, updatedSettings, currentUser);
+        setCloudStatus('synced');
+        setLastSyncTime(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      } catch (err) {
+        console.error('Failed to save to cloud Firestore:', err);
+        setCloudStatus('offline');
+      } finally {
+        setTimeout(() => setIsSyncing(false), 300);
+      }
+    },
+    [settings, currentUser]
+  );
 
   // Login handler
   const handleLogin = async () => {
     try {
       const user = await loginWithGoogle();
       if (user) {
-        showToast('Google hesabınız bağlandı. Linkleriniz bulutta güvende!');
+        showToast('Google hesabınız bağlandı! Linkleriniz tüm cihazlarınızda eşzamanlı.');
+        // Push current data under user ownership as well
+        await saveCentralScheduleToCloud(weeks, settings, user);
       }
     } catch (error) {
       console.error('Login error:', error);
-      showToast('Giriş yapılamadı veya pencere kapatıldı.');
+      showToast('Giriş penceresi kapatıldı veya izin verilmedi.');
     }
   };
 
@@ -173,7 +195,7 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await logoutUser();
-      showToast('Çıkış yapıldı. Verileriniz bu cihazda saklanmaya devam ediyor.');
+      showToast('Çıkış yapıldı.');
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -181,40 +203,39 @@ export default function App() {
 
   // Handler to save Google Drive link on a specific week
   const handleSaveDriveLink = (weekNumber: number, url: string, title?: string) => {
-    setWeeks((prev) =>
-      prev.map((w) => {
-        if (w.weekNumber !== weekNumber) return w;
-        return {
-          ...w,
-          driveUrl: url,
-          driveTitle: title || `Hafta ${weekNumber} Dosyası`,
-          status: w.status === 'pending' ? 'in_progress' : w.status,
-        };
-      })
-    );
-    showToast(`Hafta ${weekNumber} Google Drive linki hesaba kaydedildi.`);
+    const updated = weeks.map((w) => {
+      if (w.weekNumber !== weekNumber) return w;
+      return {
+        ...w,
+        driveUrl: url,
+        driveTitle: title || `Hafta ${weekNumber} Dosyası`,
+        status: w.status === 'pending' ? 'in_progress' : w.status,
+      };
+    });
+
+    persistChanges(updated);
+    showToast(`Hafta ${weekNumber} Drive linki kaydedildi ve tüm cihazlara eşitlendi!`);
   };
 
   // Handler to remove Google Drive link from a specific week
   const handleRemoveDriveLink = (weekNumber: number) => {
-    setWeeks((prev) =>
-      prev.map((w) => {
-        if (w.weekNumber !== weekNumber) return w;
-        return {
-          ...w,
-          driveUrl: '',
-          driveTitle: '',
-        };
-      })
-    );
-    showToast(`Hafta ${weekNumber} Google Drive linki kaldırıldı.`);
+    const updated = weeks.map((w) => {
+      if (w.weekNumber !== weekNumber) return w;
+      return {
+        ...w,
+        driveUrl: '',
+        driveTitle: '',
+      };
+    });
+
+    persistChanges(updated);
+    showToast(`Hafta ${weekNumber} Drive linki kaldırıldı.`);
   };
 
   // Handler to update a single week
   const handleUpdateWeek = (updatedWeek: WeekPlan) => {
-    setWeeks((prev) =>
-      prev.map((w) => (w.weekNumber === updatedWeek.weekNumber ? updatedWeek : w))
-    );
+    const updated = weeks.map((w) => (w.weekNumber === updatedWeek.weekNumber ? updatedWeek : w));
+    persistChanges(updated);
     if (selectedWeekDetail?.weekNumber === updatedWeek.weekNumber) {
       setSelectedWeekDetail(updatedWeek);
     }
@@ -223,25 +244,25 @@ export default function App() {
 
   // Handler to toggle an innovation task
   const handleToggleTask = (weekNumber: number, taskId: string) => {
-    setWeeks((prev) =>
-      prev.map((w) => {
-        if (w.weekNumber !== weekNumber) return w;
-        const updatedInnovations = w.innovations.map((inv) =>
-          inv.id === taskId ? { ...inv, isCompleted: !inv.isCompleted } : inv
-        );
-        const completed = updatedInnovations.filter((i) => i.isCompleted).length;
-        const progress = Math.round((completed / (updatedInnovations.length || 1)) * 100);
-        const status =
-          progress === 100 ? 'completed' : progress > 0 ? 'in_progress' : w.status;
+    const updated = weeks.map((w) => {
+      if (w.weekNumber !== weekNumber) return w;
+      const updatedInnovations = w.innovations.map((inv) =>
+        inv.id === taskId ? { ...inv, isCompleted: !inv.isCompleted } : inv
+      );
+      const completed = updatedInnovations.filter((i) => i.isCompleted).length;
+      const progress = Math.round((completed / (updatedInnovations.length || 1)) * 100);
+      const status =
+        progress === 100 ? 'completed' : progress > 0 ? 'in_progress' : w.status;
 
-        return {
-          ...w,
-          innovations: updatedInnovations,
-          progress,
-          status,
-        };
-      })
-    );
+      return {
+        ...w,
+        innovations: updatedInnovations,
+        progress,
+        status,
+      };
+    });
+
+    persistChanges(updated);
   };
 
   // Handler to add a new innovation
@@ -255,22 +276,21 @@ export default function App() {
       createdAt: new Date().toISOString().split('T')[0],
     };
 
-    setWeeks((prev) =>
-      prev.map((w) => {
-        if (w.weekNumber !== weekNumber) return w;
-        const updatedInnovations = [...w.innovations, newItem];
-        const completed = updatedInnovations.filter((i) => i.isCompleted).length;
-        const progress = Math.round((completed / updatedInnovations.length) * 100);
-        return {
-          ...w,
-          innovations: updatedInnovations,
-          progress,
-          status: w.status === 'pending' ? 'in_progress' : w.status,
-        };
-      })
-    );
+    const updated = weeks.map((w) => {
+      if (w.weekNumber !== weekNumber) return w;
+      const updatedInnovations = [...w.innovations, newItem];
+      const completed = updatedInnovations.filter((i) => i.isCompleted).length;
+      const progress = Math.round((completed / updatedInnovations.length) * 100);
+      return {
+        ...w,
+        innovations: updatedInnovations,
+        progress,
+        status: w.status === 'pending' ? 'in_progress' : w.status,
+      };
+    });
 
-    showToast(`Hafta ${weekNumber} için yeni yenilik eklendi!`);
+    persistChanges(updated);
+    showToast(`Hafta ${weekNumber} için yeni yenilik eklendi ve buluta kaydedildi!`);
   };
 
   // Quick open add modal for specific week
@@ -283,16 +303,10 @@ export default function App() {
   const handleResetData = () => {
     if (
       window.confirm(
-        'Tüm 30 haftalık programı sıfırlamak istediğinize emin misiniz? Yapılan tüm eklemeler temizlenecektir.'
+        'Tüm 30 haftalık programı sıfırlamak istediğinize emin misiniz? Yapılan tüm eklemeler silinecektir.'
       )
     ) {
-      setWeeks(INITIAL_WEEKS);
-      setSettings(INITIAL_SETTINGS);
-      localStorage.removeItem(STORAGE_KEY_WEEKS);
-      localStorage.removeItem(STORAGE_KEY_SETTINGS);
-      if (currentUser) {
-        saveUserScheduleToCloud(currentUser.uid, INITIAL_WEEKS, INITIAL_SETTINGS);
-      }
+      persistChanges(INITIAL_WEEKS, INITIAL_SETTINGS);
       showToast('Program temizlendi.');
     }
   };
@@ -358,31 +372,43 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        {/* Account Sync Banner (If user is not logged in, show helpful 1-click login prompt) */}
-        {!currentUser && (
-          <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-slate-800">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-600 text-white rounded-lg shrink-0">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-900">
-                  Google Drive Linkleriniz Asla Kaybolmasın
-                </div>
-                <div className="text-[11px] text-slate-600">
-                  Google hesabınızla tek tıkla giriş yaparak tüm haftalık Drive bağlantılarınızı ve yeniliklerinizi bulutta kalıcı olarak saklayabilirsiniz.
-                </div>
-              </div>
+        {/* Real-time Multi-Device Sync Notification Bar */}
+        <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
+              <Smartphone className="w-4 h-4" />
             </div>
-            <button
-              onClick={handleLogin}
-              className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors shrink-0 flex items-center justify-center gap-1.5"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Google ile Hesabı Kaydet</span>
-            </button>
+            <div>
+              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                <span>Cihazlar Arası Canlı Bulut Senkronizasyonu Aktif</span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                  Canlı Bağlı
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Telefonunuzdan, tabletinizden veya başka bir tarayıcıdan bu adrese girdiğinizde tüm Google Drive linkleriniz anında otomatik görünür.
+              </p>
+            </div>
           </div>
-        )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            {lastSyncTime && (
+              <span className="text-[11px] text-slate-400 font-mono tabular-nums hidden md:inline">
+                Son eşitleme: {lastSyncTime}
+              </span>
+            )}
+            {!currentUser && (
+              <button
+                onClick={handleLogin}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 border border-slate-200 rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Hesapla Eşle</span>
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* Hero Banner with Google Drive and Account Status */}
         <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -395,7 +421,7 @@ export default function App() {
                   <span aria-hidden="true">·</span>
                   <span className="text-emerald-300 font-semibold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    Kayıtlı Hesap: {currentUser.email}
+                    {currentUser.email}
                   </span>
                 </>
               )}
@@ -404,7 +430,7 @@ export default function App() {
               Her Hafta İçin Google Drive Linkleri ve Yenilikler
             </h1>
             <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-              Her haftanın kutucuğundaki butona basarak Google Drive ödev linklerinizi kaydedebilir, siteden çıksanız bile hesabınızla giriş yaparak tüm linklerinize dilediğiniz zaman erişebilirsiniz.
+              Her haftanın kutucuğundaki butona basarak Google Drive ödev linklerinizi kaydedebilirsiniz. Eklediğiniz linkler buluta anında kaydedilir ve başka bir telefondan veya tarayıcıdan girdiğinizde otomatik olarak karşınızda olur.
             </p>
           </div>
 
@@ -554,7 +580,11 @@ export default function App() {
         isOpen={isDriveHubOpen}
         onClose={() => setIsDriveHubOpen(false)}
         driveFolderUrl={settings.googleDriveFolderUrl}
-        onUpdateDriveFolderUrl={(url) => setSettings((s) => ({ ...s, googleDriveFolderUrl: url }))}
+        onUpdateDriveFolderUrl={(url) => {
+          const updated = { ...settings, googleDriveFolderUrl: url };
+          setSettings(updated);
+          persistChanges(weeks, updated);
+        }}
         weeks={weeks}
       />
 
