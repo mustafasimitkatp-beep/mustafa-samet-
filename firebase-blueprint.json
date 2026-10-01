@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "UserSchedule": {
+      "title": "UserSchedule",
+      "description": "30 haftalık ödev programı, her haftanın Google Drive linkleri ve yenilikleri",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Kullanıcının Firebase Auth kimliği"
+        },
+        "email": {
+          "type": "string",
+          "description": "Kullanıcının e-posta adresi"
+        },
+        "weeks": {
+          "type": "array",
+          "description": "30 haftalık planlar ve Google Drive bağlantıları"
+        },
+        "googleDriveFolderUrl": {
+          "type": "string",
+          "description": "Kullanıcının ana Google Drive klasör linki"
+        },
+        "projectName": {
+          "type": "string",
+          "description": "Proje başlığı"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Son güncelleme zamanı"
+        }
+      },
+      "required": ["userId", "weeks"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/schedule/current": {
+      "schema": "UserSchedule",
+      "description": "Kullanıcının 30 haftalık ödev ve Google Drive veritabanı kaydı"
+    }
+  }
+}

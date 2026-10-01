@@ -1,0 +1,6 @@
+{
+  "name": "30 Haftalık Ödev ve İnovasyon Programı",
+  "description": "30 haftalık kapsamlı ödev ve proje yol haritası, haftalık yenilik ve görev ekleme paneli, Google Drive bağlantısı ve ilerleme takibi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
