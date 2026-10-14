@@ -53,13 +53,13 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
         {/* Metric 1 */}
         <div className="p-4 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            30 Haftalık Takvim
+            38 Haftalık Takvim
           </div>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono tabular-nums text-slate-900">
               {completedWeeks}
             </span>
-            <span className="text-xs text-slate-400 font-mono tabular-nums">/ 30 Hafta</span>
+            <span className="text-xs text-slate-400 font-mono tabular-nums">/ {weeks.length || 38} Hafta</span>
           </div>
           <div className="mt-1 text-xs text-slate-500">
             {inProgressWeeks > 0 ? `${inProgressWeeks} hafta devam ediyor` : 'Proje başlangıç aşamasında'}
@@ -143,7 +143,7 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
           <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap mr-1">
             Faz:
           </span>
-          {(['all', 1, 2, 3, 4, 5] as const).map((phase) => (
+          {(['all', 1, 2, 3, 4, 5, 6] as const).map((phase) => (
             <button
               key={phase}
               onClick={() => onSelectPhase(phase)}

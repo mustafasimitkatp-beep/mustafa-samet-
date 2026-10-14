@@ -76,7 +76,7 @@ export const WeekCard: React.FC<WeekCardProps> = ({
                 rel="noopener noreferrer"
                 className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs transition-colors"
               >
-                <span>Drive'da Aç</span>
+                <span>{week.driveUrl?.includes('drive.google.com') ? "Drive'da Aç" : "Bağlantıyı Aç"}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>

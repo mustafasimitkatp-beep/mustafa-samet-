@@ -93,14 +93,14 @@ export const AddInnovationModal: React.FC<AddInnovationModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                Hedef Hafta (1 - 30)
+                Hedef Hafta (1 - 38)
               </label>
               <select
                 value={selectedWeek}
                 onChange={(e) => setSelectedWeek(Number(e.target.value))}
                 className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-900"
               >
-                {Array.from({ length: 30 }, (_, i) => i + 1).map((w) => (
+                {Array.from({ length: 38 }, (_, i) => i + 1).map((w) => (
                   <option key={w} value={w}>
                     Hafta {w}
                   </option>

@@ -34,10 +34,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Zone 1: Single text element wordmark */}
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
-            30
+            38
           </div>
           <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 whitespace-nowrap">
-            30 Haftalık Ödev & Drive
+            38. Hafta Ödev & Drive
           </span>
         </div>
 
@@ -51,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Tüm 30 Hafta
+            Tüm 38 Hafta
           </button>
           <button
             onClick={() => onSelectPhase(1)}
@@ -102,6 +102,16 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             Faz 5
+          </button>
+          <button
+            onClick={() => onSelectPhase(6)}
+            className={`px-3 py-1.5 rounded-md transition-colors ${
+              currentPhaseFilter === 6
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Faz 6
           </button>
         </nav>
 

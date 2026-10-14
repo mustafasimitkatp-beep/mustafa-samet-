@@ -64,10 +64,10 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
 
   // Generate markdown summary for Drive export
   const generateMarkdownSummary = () => {
-    let md = `# 30 Haftalık Ödev ve İnovasyon Programı Raporu\n`;
+    let md = `# 38 Haftalık Ödev ve İnovasyon Programı Raporu\n`;
     md += `Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR')}\n`;
     md += `Google Drive Klasörü: ${driveFolderUrl || 'Belirtilmedi'}\n\n`;
-    md += `## 30 Haftalık İlerleme Özeti\n\n`;
+    md += `## 38 Haftalık İlerleme Özeti\n\n`;
 
     weeks.forEach((w) => {
       md += `### Hafta ${w.weekNumber}: ${w.title}\n`;
@@ -101,7 +101,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `30_Haftalik_Odev_Plani_${new Date().toISOString().split('T')[0]}.md`);
+    link.setAttribute('download', `38_Haftalik_Odev_Plani_${new Date().toISOString().split('T')[0]}.md`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -123,7 +123,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                 Google Drive Ödev Merkezi
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                30 haftalık ödev dökümanlarınızı, raporlarınızı ve dosyalarınızı Drive ile yönetin
+                38 haftalık ödev dökümanlarınızı, raporlarınızı ve dosyalarınızı Drive ile yönetin
               </p>
             </div>
           </div>
@@ -290,7 +290,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
         <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div>
             <div className="text-xs font-semibold text-slate-900">
-              30 Haftalık Takvimi Drive İçin Dışa Aktar
+              38 Haftalık Takvimi Drive İçin Dışa Aktar
             </div>
             <div className="text-[11px] text-slate-500">
               Tüm haftalık ödev ve inovasyon planınızı Markdown olarak indirip Drive'a yükleyin.

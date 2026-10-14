@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WeekPlan, InnovationItem, ProjectSettings } from './types/curriculum';
-import { INITIAL_WEEKS, INITIAL_SETTINGS, PHASES } from './data/defaultWeeks';
+import { INITIAL_WEEKS, INITIAL_SETTINGS, PHASES, ensure38Weeks, TOTAL_WEEKS } from './data/defaultWeeks';
 import { Header } from './components/Header';
 import { StatsBanner } from './components/StatsBanner';
 import { WeekCard } from './components/WeekCard';
@@ -52,7 +52,7 @@ export default function App() {
   const [weeks, setWeeks] = useState<WeekPlan[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_WEEKS);
-      if (saved) return JSON.parse(saved);
+      if (saved) return ensure38Weeks(JSON.parse(saved));
     } catch (e) {
       console.error('Failed to load weeks from localStorage', e);
     }
@@ -111,10 +111,11 @@ export default function App() {
     const unsubscribe = subscribeToCentralSchedule(
       (cloudData) => {
         if (cloudData && cloudData.weeks && cloudData.weeks.length > 0) {
-          // Received latest live data from Cloud Firestore!
-          setWeeks(cloudData.weeks);
+          // Received latest live data from Cloud Firestore - ensure expanded to 38 weeks!
+          const expandedWeeks = ensure38Weeks(cloudData.weeks);
+          setWeeks(expandedWeeks);
           try {
-            localStorage.setItem(STORAGE_KEY_WEEKS, JSON.stringify(cloudData.weeks));
+            localStorage.setItem(STORAGE_KEY_WEEKS, JSON.stringify(expandedWeeks));
           } catch {
             // ignore
           }
@@ -125,6 +126,18 @@ export default function App() {
               googleDriveFolderUrl: cloudData.settings?.googleDriveFolderUrl || prev.googleDriveFolderUrl,
             }));
           }
+
+          // If the cloud was still only 30 weeks or missing week 3 link, save expanded data to cloud
+          const isCloudOutOfSync =
+            cloudData.weeks.length < TOTAL_WEEKS ||
+            !cloudData.weeks.find((w: WeekPlan) => w.weekNumber === 3)?.driveUrl?.includes('mustafasamet2.vercel.app');
+
+          if (isCloudOutOfSync) {
+            saveCentralScheduleToCloud(expandedWeeks, settings, currentUser).catch((err) => {
+              console.warn('Auto expansion or week 3 sync to cloud failed:', err);
+            });
+          }
+
           setCloudStatus('synced');
           setLastSyncTime(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         } else {
@@ -320,7 +333,7 @@ export default function App() {
     downloadAnchor.setAttribute('href', dataStr);
     downloadAnchor.setAttribute(
       'download',
-      `30_Haftalik_Odev_Programi_${new Date().toISOString().split('T')[0]}.json`
+      `38_Haftalik_Odev_Programi_${new Date().toISOString().split('T')[0]}.json`
     );
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
@@ -415,7 +428,7 @@ export default function App() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-white/10 text-blue-200 text-xs font-medium backdrop-blur-xs mb-2.5 border border-white/10">
               <Calendar className="w-3.5 h-3.5" />
-              <span>30 Haftalık Ödev & İnovasyon Takvimi</span>
+              <span>38. Hafta Ödev & İnovasyon Takvimi</span>
               {currentUser && (
                 <>
                   <span aria-hidden="true">·</span>
@@ -479,7 +492,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-slate-900">
               {currentPhaseFilter === 'all'
-                ? 'Tüm 30 Hafta'
+                ? 'Tüm 38 Hafta'
                 : PHASES.find((p) => p.id === currentPhaseFilter)?.name || `Faz ${currentPhaseFilter}`}
             </h2>
             <span className="text-xs text-slate-500 font-mono tabular-nums">
@@ -506,7 +519,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* 30 Week Cards Display */}
+        {/* 38 Week Cards Display */}
         {filteredWeeks.length === 0 ? (
           <div className="p-12 text-center bg-white border border-slate-200 rounded-2xl">
             <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
@@ -514,7 +527,7 @@ export default function App() {
             </div>
             <h3 className="text-sm font-bold text-slate-800">Eşleşen hafta bulunamadı</h3>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              Arama kriterini temizleyerek tüm 30 haftayı görüntüleyebilirsiniz.
+              Arama kriterini temizleyerek tüm 38 haftayı görüntüleyebilirsiniz.
             </p>
             <button
               onClick={() => {
@@ -555,7 +568,7 @@ export default function App() {
       <footer className="mt-auto border-t border-slate-200 bg-white py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-700">30 Haftalık Ödev Programı</span>
+            <span className="font-semibold text-slate-700">38. Hafta Ödev Programı</span>
             <span aria-hidden="true">·</span>
             <span>Google Drive & Firebase Bulut Senkronizasyonu</span>
           </div>

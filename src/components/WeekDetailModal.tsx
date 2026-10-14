@@ -186,7 +186,7 @@ export const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
               <span>{week.phaseName}</span>
               <span aria-hidden="true">·</span>
               <span className="font-mono tabular-nums font-semibold text-slate-700">
-                Hafta {week.weekNumber} / 30
+                Hafta {week.weekNumber} / 38
               </span>
             </div>
             <h2 className="text-xl font-bold tracking-tight text-slate-900 mt-1">
